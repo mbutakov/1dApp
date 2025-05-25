@@ -44,7 +44,12 @@
 
 ## 📱 Скриншоты
 
-[Здесь будут скриншоты приложения]
+[https://github.com/mbutakov/1dApp/blob/main/IMG_1783.PNG]
+[https://github.com/mbutakov/1dApp/blob/main/IMG_1784.PNG]
+[https://github.com/mbutakov/1dApp/blob/main/IMG_1785.PNG]
+[https://github.com/mbutakov/1dApp/blob/main/IMG_1786.PNG]
+[https://github.com/mbutakov/1dApp/blob/main/IMG_1787.PNG]
+[https://github.com/mbutakov/1dApp/blob/main/IMG_1788.PNG]
 
 ## 🛠 Технологии
 
