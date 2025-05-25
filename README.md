@@ -44,12 +44,11 @@
 
 ## 📱 Скриншоты
 
-[https://github.com/mbutakov/1dApp/blob/main/IMG_1783.PNG]
-[https://github.com/mbutakov/1dApp/blob/main/IMG_1784.PNG]
-[https://github.com/mbutakov/1dApp/blob/main/IMG_1785.PNG]
-[https://github.com/mbutakov/1dApp/blob/main/IMG_1786.PNG]
-[https://github.com/mbutakov/1dApp/blob/main/IMG_1787.PNG]
-[https://github.com/mbutakov/1dApp/blob/main/IMG_1788.PNG]
+<img src="https://github.com/mbutakov/1dApp/blob/main/IMG_1784.PNG?raw=true" width="300" />
+<img src="https://github.com/mbutakov/1dApp/blob/main/IMG_1785.PNG?raw=true" width="300" />
+<img src="https://github.com/mbutakov/1dApp/blob/main/IMG_1786.PNG?raw=true" width="300" />
+<img src="https://github.com/mbutakov/1dApp/blob/main/IMG_1787.PNG?raw=true" width="300" />
+<img src="https://github.com/mbutakov/1dApp/blob/main/IMG_1788.PNG?raw=true" width="300" />
 
 ## 🛠 Технологии
 
