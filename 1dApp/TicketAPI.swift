@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import UIKit
+import CommonCrypto
 
 struct TicketsResponse: Codable {
     let tickets: [Ticket]
@@ -43,23 +44,119 @@ class ImageCache {
     static let shared = ImageCache()
     private let cache = NSCache<NSString, UIImage>()
     private let logger = Logger(subsystem: "tech.mb0.1dApp", category: "ImageCache")
+    private let fileManager = FileManager.default
+    private let cacheDirectory: URL
+    
+    enum CacheCategory: String, CaseIterable {
+        case images = "Images"
+    }
     
     private init() {
-        cache.countLimit = 100 // Максимальное количество изображений в кэше
+        cache.countLimit = 100
         cache.totalCostLimit = 1024 * 1024 * 100 // 100 MB
+        
+        let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        cacheDirectory = cachesDirectory.appendingPathComponent("ImageCache")
+        
+        // Создаем директорию для кэша
+        let imagesPath = cacheDirectory.appendingPathComponent(CacheCategory.images.rawValue)
+        try? fileManager.createDirectory(at: imagesPath, withIntermediateDirectories: true)
+        
+        logger.debug("Cache directory: \(self.cacheDirectory.path)")
     }
     
     func set(_ image: UIImage, forKey key: String) {
         cache.setObject(image, forKey: key as NSString)
+        
+        let imagesPath = cacheDirectory.appendingPathComponent(CacheCategory.images.rawValue)
+        let fileURL = imagesPath.appendingPathComponent(key.md5)
+        
+        try? image.jpegData(compressionQuality: 0.8)?.write(to: fileURL)
+        
         logger.debug("Cached image for key: \(key)")
     }
     
     func get(forKey key: String) -> UIImage? {
         if let image = cache.object(forKey: key as NSString) {
-            logger.debug("Retrieved cached image for key: \(key)")
+            logger.debug("Retrieved cached image from memory for key: \(key)")
             return image
         }
+        
+        let imagesPath = cacheDirectory.appendingPathComponent(CacheCategory.images.rawValue)
+        let fileURL = imagesPath.appendingPathComponent(key.md5)
+        
+        if let data = try? Data(contentsOf: fileURL),
+           let image = UIImage(data: data) {
+            cache.setObject(image, forKey: key as NSString)
+            logger.debug("Retrieved cached image from disk for key: \(key)")
+            return image
+        }
+        
         return nil
+    }
+    
+    func calculateSize() async throws -> [CacheCategory: Int] {
+        var sizes: [CacheCategory: Int] = [:]
+        let resourceKeys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+        
+        let imagesPath = cacheDirectory.appendingPathComponent(CacheCategory.images.rawValue)
+        var totalSize = 0
+        
+        if let enumerator = fileManager.enumerator(at: imagesPath,
+                                                  includingPropertiesForKeys: Array(resourceKeys),
+                                                  options: [.skipsHiddenFiles]) {
+            for case let fileURL as URL in enumerator {
+                let resourceValues = try fileURL.resourceValues(forKeys: resourceKeys)
+                totalSize += resourceValues.totalFileAllocatedSize ?? resourceValues.fileAllocatedSize ?? 0
+            }
+        }
+        
+        sizes[.images] = totalSize
+        return sizes
+    }
+    
+    func clearCache(category: CacheCategory? = nil) async throws {
+        // Очищаем память
+        cache.removeAllObjects()
+        
+        // Очищаем диск
+        let imagesPath = cacheDirectory.appendingPathComponent(CacheCategory.images.rawValue)
+        let contents = try fileManager.contentsOfDirectory(at: imagesPath, includingPropertiesForKeys: nil)
+        for file in contents {
+            try fileManager.removeItem(at: file)
+        }
+        logger.info("Cache cleared successfully")
+    }
+    
+    // Метод для миграции существующего кэша в новую структуру
+    func migrateExistingCache() async throws {
+        let contents = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil)
+        let imagesPath = cacheDirectory.appendingPathComponent(CacheCategory.images.rawValue)
+        
+        for file in contents {
+            if file.lastPathComponent != ".DS_Store" && 
+               file.lastPathComponent != CacheCategory.images.rawValue {
+                let newPath = imagesPath.appendingPathComponent(file.lastPathComponent)
+                try fileManager.moveItem(at: file, to: newPath)
+            }
+        }
+        logger.info("Cache migration completed")
+    }
+}
+
+extension String {
+    var md5: String {
+        let length = Int(CC_MD5_DIGEST_LENGTH)
+        var digest = [UInt8](repeating: 0, count: length)
+        
+        if let d = self.data(using: .utf8) {
+            _ = d.withUnsafeBytes { body -> String in
+                CC_MD5(body.baseAddress, CC_LONG(d.count), &digest)
+                return ""
+            }
+        }
+        
+        return digest.reduce("") { $0 + String(format: "%02x", $1) }
     }
 }
 
@@ -198,7 +295,7 @@ class TicketAPI {
     }
     
     func updateTicketStatus(ticketId: Int, newStatus: String) async throws {
-        let url = baseURL.appendingPathComponent("tickets/\(ticketId)/status")
+        let url = baseURL.appendingPathComponent("tickets/\(ticketId)")
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -222,7 +319,14 @@ class TicketAPI {
             throw NSError(domain: "Server error", code: httpResponse.statusCode)
         }
         
-        logger.info("Successfully updated ticket status")
+        // Пытаемся декодировать обновленный тикет
+        do {
+            let updatedTicket = try JSONDecoder().decode(Ticket.self, from: data)
+            logger.info("Successfully updated ticket status to: \(updatedTicket.status)")
+        } catch {
+            logger.error("Failed to decode updated ticket: \(error.localizedDescription)")
+            // Не выбрасываем ошибку, так как основная операция успешна
+        }
     }
     
     func uploadPhoto(ticketId: Int, image: UIImage, senderType: String, senderId: Int64, messageId: Int?) async throws -> Int {

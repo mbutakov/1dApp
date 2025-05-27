@@ -3,6 +3,7 @@ import SwiftUI
 struct MessageBubbleView: View {
     let message: TicketMessage
     @ObservedObject var messagesVM: TicketMessagesViewModel
+    var onImageTap: ((URL) -> Void)?
     
     var messagePhotos: [TicketPhoto] {
         messagesVM.photos[message.id] ?? []
@@ -35,7 +36,18 @@ struct MessageBubbleView: View {
                 
                 // Отображение фотографий с кэшированием
                 ForEach(messagePhotos) { photo in
-                    CachedAsyncImage(url: getPhotoUrl(photo))
+                    if let url = getPhotoUrl(photo) {
+                        CachedAsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 200)
+                                .cornerRadius(12)
+                        }
+                        .onTapGesture {
+                            onImageTap?(url)
+                        }
+                    }
                 }
                 
                 Text(message.created_at.prefix(16).replacingOccurrences(of: "T", with: " "))

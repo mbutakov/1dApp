@@ -1,79 +1,81 @@
 import SwiftUI
 import OSLog
 
-struct CachedAsyncImage: View {
+struct CachedAsyncImage<Content: View>: View {
     let url: URL?
-    @State private var image: UIImage?
-    @State private var isLoading = false
+    let content: (Image) -> Content
+    @State private var phase: AsyncImagePhase = .empty
     private let logger = Logger(subsystem: "tech.mb0.1dApp", category: "CachedImage")
     
-    var body: some View {
-        Group {
-            if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 200)
-                    .cornerRadius(12)
-            } else if isLoading {
-                ProgressView()
-                    .frame(width: 200, height: 200)
-            } else {
-                Image(systemName: "photo.fill")
-                    .foregroundColor(.secondary)
-                    .frame(width: 200, height: 200)
-            }
-        }
-        .onAppear {
-            loadImage()
+    init(url: URL?, @ViewBuilder content: @escaping (Image) -> Content) {
+        self.url = url
+        self.content = content
+        
+        if let url = url {
+            logger.debug("Initializing CachedAsyncImage with URL: \(url.absoluteString)")
         }
     }
     
-    private func loadImage() {
-        guard let url = url else { return }
-        let cacheKey = url.absoluteString
-        
-        // Проверяем кэш
-        if let cachedImage = ImageCache.shared.get(forKey: cacheKey) {
-            self.image = cachedImage
-            return
+    init(url: URL?) where Content == Image {
+        self.init(url: url) { $0 }
+    }
+    
+    var body: some View {
+        Group {
+            switch phase {
+            case .empty:
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .success(let image):
+                content(image)
+            case .failure(let error):
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 24))
+                        .foregroundColor(.red)
+                    Text("Ошибка загрузки")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .onAppear {
+                    logger.error("Failed to load image: \(error.localizedDescription)")
+                }
+            @unknown default:
+                EmptyView()
+            }
         }
-        
-        // Если нет в кэше, загружаем
-        isLoading = true
-        
-        // Логируем URL для отладки
-        logger.debug("Loading image from URL: \(url.absoluteString)")
-        
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            isLoading = false
+        .task(id: url?.absoluteString) {
+            guard let url = url else { return }
             
-            if let error = error {
-                logger.error("Failed to load image: \(error.localizedDescription)")
+            // Проверяем кэш
+            if let cachedImage = ImageCache.shared.get(forKey: url.absoluteString) {
+                phase = .success(Image(uiImage: cachedImage))
                 return
             }
             
-            guard let data = data else {
-                logger.error("No data received")
-                return
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let uiImage = UIImage(data: data) {
+                    ImageCache.shared.set(uiImage, forKey: url.absoluteString)
+                    phase = .success(Image(uiImage: uiImage))
+                } else {
+                    throw URLError(.cannotDecodeRawData)
+                }
+            } catch {
+                phase = .failure(error)
             }
-            
-            // Логируем тип контента из ответа
-            if let response = response as? HTTPURLResponse {
-                logger.debug("Response content type: \(response.value(forHTTPHeaderField: "Content-Type") ?? "unknown")")
-            }
-            
-            guard let loadedImage = UIImage(data: data) else {
-                logger.error("Invalid image data")
-                return
-            }
-            
-            // Сохраняем в кэш и обновляем UI
-            ImageCache.shared.set(loadedImage, forKey: cacheKey)
-            
-            DispatchQueue.main.async {
-                self.image = loadedImage
-            }
-        }.resume()
+        }
+    }
+}
+
+extension AsyncImagePhase {
+    var image: Image? {
+        switch self {
+        case .success(let image):
+            return image
+        default:
+            return nil
+        }
     }
 } 

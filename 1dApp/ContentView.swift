@@ -21,6 +21,16 @@ struct ContentView: View {
                 .tabItem {
                     Label("Пользователи", systemImage: "person.2")
                 }
+            
+            OtherView()
+                .tabItem {
+                    Label("Остальное", systemImage: "ellipsis")
+                }
+            
+            SettingsView()
+                .tabItem {
+                    Label("Настройки", systemImage: "gear")
+                }
         }
     }
 }

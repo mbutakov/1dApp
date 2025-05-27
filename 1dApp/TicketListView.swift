@@ -8,15 +8,20 @@ struct TicketListView: View {
     @State private var selectedTicket: Ticket?
     @State private var showEditTicket = false
     @State private var supportId: Int64 = 1
+    @State private var showFilters = false
     
     private var uniqueStatuses: [String] {
         Array(Set(viewModel.tickets.map { $0.status })).sorted()
     }
     
     private var statusColors: [String: Color] = [
-        "открыт": .green,
-        "в работе": .orange,
-        "закрыт": .red
+        "Создан": .blue,
+        "Назначен": .purple,
+        "В работе": .orange,
+        "Ожидает ответа пользователя": .yellow,
+        "Ожидает действий поддержки": .red,
+        "Закрыт": .gray,
+        "Отменён": .secondary
     ]
     
     private var filteredTickets: [Ticket] {
@@ -36,7 +41,7 @@ struct TicketListView: View {
         NavigationSplitView {
             VStack(spacing: 0) {
                 // Поиск и фильтры в одном контейнере
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     // Search bar
                     HStack {
                         Image(systemName: "magnifyingglass")
@@ -53,181 +58,165 @@ struct TicketListView: View {
                             .transition(.opacity)
                         }
                     }
-                    .padding(12)
-                    .background(.thinMaterial)
-                    .cornerRadius(16)
+                    .padding(10)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(10)
                     
                     // Фильтры
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
+                    VStack(spacing: 8) {
+                        HStack {
                             Button(action: { selectedStatus = nil }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                                        .font(.system(size: 16, weight: .medium))
+                                HStack(spacing: 6) {
+                                    Image(systemName: "line.3.horizontal.decrease.circle")
                                     Text("Все")
-                                        .font(.system(size: 15, weight: .medium))
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
+                                .font(.system(.subheadline, design: .rounded))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
                                 .background(selectedStatus == nil ? Color.accentColor : Color(.tertiarySystemFill))
                                 .foregroundColor(selectedStatus == nil ? .white : .primary)
-                                .cornerRadius(20)
-                                .shadow(color: selectedStatus == nil ? Color.accentColor.opacity(0.3) : .clear, radius: 5, x: 0, y: 2)
-                                .scaleEffect(selectedStatus == nil ? 1.05 : 1.0)
+                                .cornerRadius(8)
                             }
                             
-                            ForEach(uniqueStatuses, id: \.self) { status in
-                                Button(action: { selectedStatus = status }) {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: status == "открыт" ? "checkmark.circle.fill" :
-                                                           status == "закрыт" ? "xmark.circle.fill" : "clock.fill")
-                                            .font(.system(size: 16, weight: .medium))
-                                        Text(status)
-                                            .font(.system(size: 15, weight: .medium))
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(uniqueStatuses, id: \.self) { status in
+                                        Button(action: { selectedStatus = status }) {
+                                            Text(Ticket(id: 0, user_id: 0, title: "", description: "", status: status, category: nil, created_at: "", closed_at: nil, user_full_name: "").statusDisplayName)
+                                                .font(.system(.subheadline, design: .rounded))
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(selectedStatus == status ? statusColors[status, default: .gray] : Color(.tertiarySystemFill))
+                                                .foregroundColor(selectedStatus == status ? .white : statusColors[status, default: .gray])
+                                                .cornerRadius(8)
+                                        }
                                     }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .background(selectedStatus == status ? statusColors[status]?.opacity(0.9) : Color(.tertiarySystemFill))
-                                    .foregroundColor(selectedStatus == status ? .white : statusColors[status])
-                                    .cornerRadius(20)
-                                    .shadow(color: selectedStatus == status ? (statusColors[status] ?? .clear).opacity(0.3) : .clear, radius: 5, x: 0, y: 2)
-                                    .scaleEffect(selectedStatus == status ? 1.05 : 1.0)
                                 }
                             }
+                            
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showFilters.toggle()
+                                }
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(showFilters ? .blue : .secondary)
+                                    .padding(8)
+                                    .background(showFilters ? Color.blue.opacity(0.1) : Color(.tertiarySystemFill))
+                                    .clipShape(Circle())
+                            }
                         }
-                        .padding(.horizontal, 4)
+                        
+                        if showFilters {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Статистика по статусам")
+                                    .font(.headline)
+                                    .padding(.bottom, 4)
+                                
+                                ForEach(uniqueStatuses, id: \.self) { status in
+                                    let count = viewModel.tickets.filter { $0.status == status }.count
+                                    HStack {
+                                        Circle()
+                                            .fill(statusColors[status, default: .gray])
+                                            .frame(width: 12, height: 12)
+                                        
+                                        Text(status.capitalized)
+                                            .font(.subheadline)
+                                        
+                                        Spacer()
+                                        
+                                        Text("\(count)")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .padding()
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                     }
                 }
-                .padding()
-                .background(.ultraThinMaterial)
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .background(Color(.systemBackground))
+                
+                Divider()
                 
                 // Список тикетов
                 List(filteredTickets, selection: $selectedTicket) { ticket in
                     NavigationLink(value: ticket) {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Text(ticket.title)
-                                            .font(.headline)
-                                            .foregroundColor(.primary)
-                                        
-                                        if ticket.id == viewModel.lastOpenedTicketId {
-                                            Image(systemName: "clock.arrow.circlepath")
-                                                .foregroundColor(.blue)
-                                                .font(.system(size: 14))
-                                        }
-                                    }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(ticket.title)
+                                        .font(.system(.body, design: .rounded))
+                                        .fontWeight(.medium)
                                     
                                     Text(ticket.description)
-                                        .font(.subheadline)
+                                        .font(.system(.subheadline))
                                         .foregroundColor(.secondary)
                                         .lineLimit(2)
                                 }
                                 
                                 Spacer()
                                 
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text(ticket.status)
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 5)
-                                        .background(statusColors[ticket.status]?.opacity(0.15))
-                                        .foregroundColor(statusColors[ticket.status])
-                                        .cornerRadius(12)
-                                    
-                                    HStack(spacing: 6) {
-                                        let shortName = ticket.user_full_name.split(separator: " ").prefix(2).map { 
-                                            if $0 == ticket.user_full_name.split(separator: " ")[0] {
-                                                return String($0)
-                                            } else {
-                                                return String($0.prefix(1)) + "."
-                                            }
-                                        }.joined(separator: " ")
-                                        
-                                        Text(shortName)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        
-                                        Image(systemName: "person.circle.fill")
-                                            .foregroundColor(.secondary)
-                                            .font(.system(size: 16))
-                                    }
-                                }
+                                Text(ticket.statusDisplayName)
+                                    .font(.system(.caption, design: .rounded))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(statusColors[ticket.status]?.opacity(0.15))
+                                    .foregroundColor(statusColors[ticket.status])
+                                    .cornerRadius(6)
                             }
                             
-                            HStack(spacing: 16) {
+                            HStack(spacing: 12) {
                                 Label {
                                     Text(ticket.created_at.prefix(10))
-                                        .font(.caption)
+                                        .font(.caption2)
                                 } icon: {
                                     Image(systemName: "calendar")
-                                        .font(.caption)
+                                        .font(.caption2)
                                 }
                                 .foregroundColor(.secondary)
                                 
-                                if let category = ticket.category {
-                                    Label {
-                                        Text(category)
-                                            .font(.caption)
-                                    } icon: {
-                                        Image(systemName: "folder")
-                                            .font(.caption)
-                                    }
-                                    .foregroundColor(.secondary)
+                                Label {
+                                    Text(ticket.user_full_name)
+                                        .font(.caption2)
+                                } icon: {
+                                    Image(systemName: "person")
+                                        .font(.caption2)
                                 }
+                                .foregroundColor(.secondary)
                             }
                         }
-                        .padding(.vertical, 8)
-                        .background(
-                            ticket.id == viewModel.lastOpenedTicketId ?
-                            Color.accentColor.opacity(0.05) :
-                            Color.clear
-                        )
+                        .padding(.vertical, 6)
                     }
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    .swipeActions(edge: .leading) {
                         Button {
                             selectedTicket = ticket
                             showEditTicket = true
                         } label: {
-                            Label("Редактировать", systemImage: "slider.horizontal.3")
+                            Label("Изменить", systemImage: "pencil")
                         }
-                        .tint(.indigo)
+                        .tint(.blue)
                     }
-                    .listRowBackground(Color(.secondarySystemBackground).opacity(0.5))
-                    .listRowSeparator(.hidden)
-                    .padding(.vertical, 4)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    .listRowBackground(Color(.systemBackground))
                 }
                 .listStyle(.plain)
-                .navigationTitle("Тикеты")
                 .refreshable { viewModel.loadTickets() }
-                .overlay {
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .scaleEffect(1.2)
-                    } else if let error = viewModel.error {
-                        VStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.title)
-                                .foregroundColor(.red)
-                            Text(error)
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.red)
-                        }
-                        .padding()
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(12)
-                    } else if filteredTickets.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "ticket")
-                                .font(.system(size: 40))
-                                .foregroundColor(.secondary)
-                            Text("Нет тикетов")
-                                .font(.title3)
-                                .foregroundColor(.secondary)
-                        }
-                    }
+            }
+            .navigationTitle("Тикеты")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 28)
                 }
             }
         } detail: {
@@ -237,15 +226,7 @@ struct TicketListView: View {
                         viewModel.setLastOpenedTicket(ticket.id)
                     }
             } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .resizable()
-                        .frame(width: 60, height: 60)
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text("Выберите тикет для просмотра")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                }
+                ContentUnavailableView("Выберите тикет", systemImage: "ticket")
             }
         }
         .sheet(isPresented: $showEditTicket) {
